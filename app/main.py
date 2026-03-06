@@ -10,131 +10,150 @@ app = FastAPI(title="Excel összesítő")
 @app.get("/", response_class=HTMLResponse)
 def home():
     return """
-<!doctype html>
-<html lang="hu">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Excel összesítő</title>
-  <style>
-    :root { color-scheme: dark; }
-    body {
-      margin: 0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
-      background: #0b1020;
-      color: #e6e8ee;
-    }
-    .wrap { max-width: 820px; margin: 0 auto; padding: 28px 18px; }
-    .card {
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 16px;
-      padding: 18px;
-      box-shadow: 0 12px 40px rgba(0,0,0,0.35);
-    }
-    h1 { font-size: 20px; margin: 0 0 10px; }
-    p { margin: 8px 0; line-height: 1.5; color: rgba(230,232,238,0.9); }
-    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
-    .file {
-      flex: 1;
-      min-width: 240px;
-      padding: 10px 12px;
-      background: rgba(0,0,0,0.25);
-      border: 1px dashed rgba(255,255,255,0.18);
-      border-radius: 12px;
-    }
-    input[type="file"] { width: 100%; }
-    button {
-      border: 0;
-      border-radius: 12px;
-      padding: 10px 14px;
-      background: #6d5efc;
-      color: white;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    button:disabled { opacity: 0.6; cursor: not-allowed; }
-    .small { font-size: 12px; opacity: 0.85; }
-    .status { margin-top: 12px; padding: 10px 12px; border-radius: 12px; display:none; }
-    .status.ok { display:block; background: rgba(45, 212, 191, 0.15); border: 1px solid rgba(45, 212, 191, 0.35); }
-    .status.err { display:block; background: rgba(248, 113, 113, 0.12); border: 1px solid rgba(248, 113, 113, 0.35); }
-    .spinner {
-      width: 14px; height: 14px;
-      border: 2px solid rgba(255,255,255,0.25);
-      border-top-color: rgba(255,255,255,0.95);
-      border-radius: 50%;
-      display:inline-block;
-      animation: spin 0.8s linear infinite;
-      vertical-align: -2px;
-      margin-right: 8px;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .footer { margin-top: 10px; opacity: 0.7; font-size: 12px; }
-    a { color: #bcb6ff; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>Excel összesítő</h1>
-    <p>Tölts fel több <b>.xlsx</b> fájlt. A rendszer eldobja az A–E oszlopokat, majd cikkszám + név alapján összeadja a darabszámot.</p>
+        <!doctype html>
+        <html lang="hu">
+        <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Excel összesítő</title>
+        <style>
+            :root { color-scheme: dark; }
+            body {
+            margin: 0;
+            font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+            background: #0b1020;
+            color: #e6e8ee;
+            }
+            .wrap { max-width: 820px; margin: 0 auto; padding: 28px 18px; }
+            .card {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 16px;
+            padding: 18px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+            }
+            h1 { font-size: 20px; margin: 0 0 10px; }
+            p { margin: 8px 0; line-height: 1.5; color: rgba(230,232,238,0.9); }
+            .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+            .file {
+            flex: 1;
+            min-width: 240px;
+            padding: 10px 12px;
+            background: rgba(0,0,0,0.25);
+            border: 1px dashed rgba(255,255,255,0.18);
+            border-radius: 12px;
+            }
+            input[type="file"] { width: 100%; }
+            button {
+            border: 0;
+            border-radius: 12px;
+            padding: 10px 14px;
+            background: #6d5efc;
+            color: white;
+            font-weight: 700;
+            cursor: pointer;
+            }
+            button:disabled { opacity: 0.6; cursor: not-allowed; }
+            .small { font-size: 12px; opacity: 0.85; }
+            .status { margin-top: 12px; padding: 10px 12px; border-radius: 12px; display:none; }
+            .status.ok { display:block; background: rgba(45, 212, 191, 0.15); border: 1px solid rgba(45, 212, 191, 0.35); }
+            .status.err { display:block; background: rgba(248, 113, 113, 0.12); border: 1px solid rgba(248, 113, 113, 0.35); }
+            .spinner {
+            width: 14px; height: 14px;
+            border: 2px solid rgba(255,255,255,0.25);
+            border-top-color: rgba(255,255,255,0.95);
+            border-radius: 50%;
+            display:inline-block;
+            animation: spin 0.8s linear infinite;
+            vertical-align: -2px;
+            margin-right: 8px;
+            }
+            @keyframes spin { to { transform: rotate(360deg); } }
+            .footer { margin-top: 10px; opacity: 0.7; font-size: 12px; }
+            a { color: #bcb6ff; }
+        </style>
+        </head>
+        <body>
+        <div class="wrap">
+            <div class="card">
+            <h1>Excel összesítő</h1>
+            <p>Tölts fel több <b>.xlsx</b> fájlt. A rendszer eldobja az első 5 oszlopot, majd cikkszám + név alapján összeadja a darabszámot.</p>
 
-    <div class="row">
-      <input id="files" type="file" multiple accept=".xlsx" />
-      <button id="run" disabled>Összesítés</button>
-    </div>
+            <div class="row">
+                <div class="file">
+                <input id="files" type="file" multiple accept=".xlsx" />
+                </div>
+                <button id="run" disabled>Összesítés indítása</button>
+            </div>
 
-    <div class="status" id="status"></div>
-    <div class="muted">
-      Tipp: Ha üres az oldal, nézd meg a <a href="/docs">/docs</a> felületet is (API teszt).
-    </div>
-  </div>
+            <div id="status" class="status"></div>
 
-<script>
-  const filesEl = document.getElementById("files");
-  const runBtn = document.getElementById("run");
-  const statusEl = document.getElementById("status");
+            <div class="footer">
+                API teszt: <a href="/docs">/docs</a>
+            </div>
+            </div>
+        </div>
 
-  filesEl.addEventListener("change", () => {
-    runBtn.disabled = !(filesEl.files && filesEl.files.length);
-    statusEl.textContent = filesEl.files.length ? (`Kiválasztva: ${filesEl.files.length} fájl`) : "";
-  });
+        <script>
+            const filesEl = document.getElementById("files");
+            const runBtn = document.getElementById("run");
+            const statusEl = document.getElementById("status");
 
-  runBtn.addEventListener("click", async () => {
-    runBtn.disabled = true;
-    statusEl.textContent = "Feldolgozás folyamatban…";
+            filesEl.addEventListener("change", () => {
+            runBtn.disabled = !(filesEl.files && filesEl.files.length);
+            if (filesEl.files.length) {
+                statusEl.className = "status ok";
+                statusEl.innerHTML = "Kiválasztva: " + filesEl.files.length + " fájl";
+            } else {
+                statusEl.className = "status";
+                statusEl.innerHTML = "";
+            }
+            });
 
-    const fd = new FormData();
-    for (const f of filesEl.files) fd.append("files", f);
+            runBtn.addEventListener("click", async () => {
+            runBtn.disabled = true;
+            statusEl.className = "status ok";
+            statusEl.innerHTML = '<span class="spinner"></span>Feldolgozás folyamatban...';
 
-    try {
-      const res = await fetch("/tools/excel/aggregate", { method: "POST", body: fd });
-      if (!res.ok) {
-        const msg = await res.text();
-        statusEl.textContent = "Hiba: " + msg;
-        runBtn.disabled = false;
-        return;
-      }
+            const fd = new FormData();
+            for (const f of filesEl.files) fd.append("files", f);
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "osszesitett_struktura_tisztitott.xlsx";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+            try {
+                const res = await fetch("/tools/excel/aggregate", {
+                method: "POST",
+                body: fd
+                });
 
-      statusEl.textContent = "Kész! A fájl letöltődött.";
-    } catch (e) {
-      statusEl.textContent = "Hálózati hiba: " + e;
-    } finally {
-      runBtn.disabled = false;
-    }
-  });
-</script>
-</body>
-</html>
+                if (!res.ok) {
+                const msg = await res.text();
+                statusEl.className = "status err";
+                statusEl.textContent = "Hiba: " + msg;
+                runBtn.disabled = false;
+                return;
+                }
+
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "osszesitett_struktura_tisztitott.xlsx";
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+
+                statusEl.className = "status ok";
+                statusEl.textContent = "Kész! Az összesített fájl letöltődött.";
+            } catch (e) {
+                statusEl.className = "status err";
+                statusEl.textContent = "Hálózati hiba történt.";
+            } finally {
+                runBtn.disabled = false;
+            }
+            });
+        </script>
+        </body>
+        </html>
     """
 
 def aggregate_excels(files: List[UploadFile]) -> bytes:
