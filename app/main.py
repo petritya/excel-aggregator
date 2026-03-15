@@ -3,7 +3,9 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 import pandas as pd
 import io
 import zipfile
-from typing import List
+from typing import List, Tuple
+from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
+from openpyxl.utils import get_column_letter
 
 app = FastAPI(title="Excel összesítő")
 
@@ -55,7 +57,6 @@ def home():
       cursor: pointer;
     }
     button:disabled { opacity: 0.6; cursor: not-allowed; }
-    .small { font-size: 12px; opacity: 0.85; }
     .status { margin-top: 12px; padding: 10px 12px; border-radius: 12px; display:none; }
     .status.ok { display:block; background: rgba(45, 212, 191, 0.15); border: 1px solid rgba(45, 212, 191, 0.35); }
     .status.err { display:block; background: rgba(248, 113, 113, 0.12); border: 1px solid rgba(248, 113, 113, 0.35); }
@@ -104,12 +105,21 @@ def home():
     const runBtn = document.getElementById("run");
     const statusEl = document.getElementById("status");
 
+    function setStatusOk(message) {
+      statusEl.className = "status ok";
+      statusEl.innerHTML = message;
+    }
+
+    function setStatusErr(message) {
+      statusEl.className = "status err";
+      statusEl.textContent = message;
+    }
+
     filesEl.addEventListener("change", () => {
       runBtn.disabled = !(filesEl.files && filesEl.files.length);
 
       if (filesEl.files.length) {
-        statusEl.className = "status ok";
-        statusEl.innerHTML = "Kiválasztva: " + filesEl.files.length + " fájl";
+        setStatusOk("Kiválasztva: " + filesEl.files.length + " fájl");
       } else {
         statusEl.className = "status";
         statusEl.innerHTML = "";
@@ -118,8 +128,7 @@ def home():
 
     runBtn.addEventListener("click", async () => {
       runBtn.disabled = true;
-      statusEl.className = "status ok";
-      statusEl.innerHTML = '<span class="spinner"></span>Fájlok feldolgozása és összesítés folyamatban...';
+      setStatusOk('<span class="spinner"></span>Fájlok feldolgozása és összesítés folyamatban...');
 
       const fd = new FormData();
       for (const f of filesEl.files) {
@@ -134,11 +143,15 @@ def home():
 
         if (!res.ok) {
           const msg = await res.text();
-          statusEl.className = "status err";
-          statusEl.textContent = "Hiba: " + msg;
+          setStatusErr("Hiba: " + msg);
           runBtn.disabled = false;
           return;
         }
+
+        const zipExcelCount = res.headers.get("X-Zip-Excel-Count") || "0";
+        const totalExcelCount = res.headers.get("X-Total-Excel-Count") || "0";
+        const originalRows = res.headers.get("X-Original-Row-Count") || "0";
+        const aggregatedRows = res.headers.get("X-Aggregated-Row-Count") || "0";
 
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
@@ -150,12 +163,18 @@ def home():
         a.remove();
         URL.revokeObjectURL(url);
 
-        statusEl.className = "status ok";
-        statusEl.textContent = "Kész! Az összesített fájl letöltődött.";
+        filesEl.value = "";
+        runBtn.disabled = true;
+
+        setStatusOk(
+          "Kész! Az összesített fájl letöltődött.<br>" +
+          "Feldolgozott Excel fájlok száma: <b>" + totalExcelCount + "</b><br>" +
+          "ZIP-ből kinyert Excel fájlok száma: <b>" + zipExcelCount + "</b><br>" +
+          "Eredeti sorok száma: <b>" + originalRows + "</b><br>" +
+          "Összesített sorok száma: <b>" + aggregatedRows + "</b>"
+        );
       } catch (e) {
-        statusEl.className = "status err";
-        statusEl.textContent = "Hálózati hiba történt.";
-      } finally {
+        setStatusErr("Hálózati hiba történt.");
         runBtn.disabled = false;
       }
     });
@@ -165,8 +184,10 @@ def home():
     """
 
 
-def read_uploaded_excels(files: List[UploadFile]) -> List[pd.DataFrame]:
-    df_list = []
+def read_uploaded_excels(files: List[UploadFile]) -> Tuple[List[pd.DataFrame], int, int]:
+    df_list: List[pd.DataFrame] = []
+    zip_excel_count = 0
+    total_excel_count = 0
 
     for uploaded_file in files:
         filename = (uploaded_file.filename or "").lower()
@@ -179,6 +200,7 @@ def read_uploaded_excels(files: List[UploadFile]) -> List[pd.DataFrame]:
             try:
                 df = pd.read_excel(io.BytesIO(content))
                 df_list.append(df)
+                total_excel_count += 1
             except Exception as e:
                 raise HTTPException(
                     status_code=400,
@@ -200,6 +222,8 @@ def read_uploaded_excels(files: List[UploadFile]) -> List[pd.DataFrame]:
                                 try:
                                     df = pd.read_excel(io.BytesIO(file_bytes))
                                     df_list.append(df)
+                                    zip_excel_count += 1
+                                    total_excel_count += 1
                                 except Exception as e:
                                     raise HTTPException(
                                         status_code=400,
@@ -223,11 +247,54 @@ def read_uploaded_excels(files: List[UploadFile]) -> List[pd.DataFrame]:
             detail="Nem található feldolgozható Excel fájl a feltöltésben."
         )
 
-    return df_list
+    return df_list, zip_excel_count, total_excel_count
 
 
-def aggregate_dataframes(df_list: List[pd.DataFrame]) -> bytes:
+def format_worksheet(ws):
+    header_fill = PatternFill(fill_type="solid", fgColor="1F2937")
+    header_font = Font(color="FFFFFF", bold=True)
+    thin_border = Border(
+        left=Side(style="thin", color="D1D5DB"),
+        right=Side(style="thin", color="D1D5DB"),
+        top=Side(style="thin", color="D1D5DB"),
+        bottom=Side(style="thin", color="D1D5DB"),
+    )
+    alt_fill = PatternFill(fill_type="solid", fgColor="F8FAFC")
+
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.border = thin_border
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    for row_idx in range(2, ws.max_row + 1):
+        for col_idx in range(1, ws.max_column + 1):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            cell.border = thin_border
+            cell.alignment = Alignment(vertical="center")
+
+            if row_idx % 2 == 0:
+                cell.fill = alt_fill
+
+    ws.auto_filter.ref = ws.dimensions
+    ws.freeze_panes = "A2"
+
+    for col_idx, column_cells in enumerate(ws.columns, start=1):
+        max_length = 0
+        for cell in column_cells:
+            value = "" if cell.value is None else str(cell.value)
+            if len(value) > max_length:
+                max_length = len(value)
+
+        adjusted_width = min(max(max_length + 2, 12), 40)
+        ws.column_dimensions[get_column_letter(col_idx)].width = adjusted_width
+
+    ws.row_dimensions[1].height = 22
+
+
+def aggregate_dataframes(df_list: List[pd.DataFrame]) -> Tuple[bytes, int, int]:
     combined_df = pd.concat(df_list, ignore_index=True)
+    original_row_count = len(combined_df)
 
     if combined_df.shape[1] <= 5:
         raise HTTPException(
@@ -235,10 +302,7 @@ def aggregate_dataframes(df_list: List[pd.DataFrame]) -> bytes:
             detail="Túl kevés oszlop: nem tudom eldobni az első 5 oszlopot."
         )
 
-    # A–E oszlopok eldobása
     combined_df = combined_df.iloc[:, 5:]
-
-    # Eredeti oszlopsorrend mentése
     original_columns = combined_df.columns.tolist()
 
     if len(original_columns) <= 6:
@@ -247,10 +311,6 @@ def aggregate_dataframes(df_list: List[pd.DataFrame]) -> bytes:
             detail="Nem találom a darabszám oszlopot a várt pozícióban."
         )
 
-    # A levágás után:
-    # 0 = cikkszám (eredetileg F)
-    # 1 = név      (eredetileg G)
-    # 6 = darab    (eredetileg L)
     cikkszam_col = combined_df.columns[0]
     nev_col = combined_df.columns[1]
     darab_col = combined_df.columns[6]
@@ -264,15 +324,17 @@ def aggregate_dataframes(df_list: List[pd.DataFrame]) -> bytes:
         .agg(agg_map)
     )
 
-    # Oszlopsorrend visszaállítása
     aggregated_df = aggregated_df[original_columns]
+    aggregated_row_count = len(aggregated_df)
 
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         aggregated_df.to_excel(writer, sheet_name="Osszesites", index=False)
+        ws = writer.book["Osszesites"]
+        format_worksheet(ws)
 
     output.seek(0)
-    return output.getvalue()
+    return output.getvalue(), original_row_count, aggregated_row_count
 
 
 @app.post("/tools/excel/aggregate")
@@ -280,13 +342,17 @@ async def excel_aggregate(files: List[UploadFile] = File(...)):
     if not files:
         raise HTTPException(status_code=400, detail="Nincs feltöltött fájl.")
 
-    df_list = read_uploaded_excels(files)
-    xlsx_bytes = aggregate_dataframes(df_list)
+    df_list, zip_excel_count, total_excel_count = read_uploaded_excels(files)
+    xlsx_bytes, original_row_count, aggregated_row_count = aggregate_dataframes(df_list)
 
     return StreamingResponse(
         io.BytesIO(xlsx_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
-            "Content-Disposition": 'attachment; filename="osszesitett_struktura_tisztitott.xlsx"'
+            "Content-Disposition": 'attachment; filename="osszesitett_struktura_tisztitott.xlsx"',
+            "X-Zip-Excel-Count": str(zip_excel_count),
+            "X-Total-Excel-Count": str(total_excel_count),
+            "X-Original-Row-Count": str(original_row_count),
+            "X-Aggregated-Row-Count": str(aggregated_row_count),
         },
     )
